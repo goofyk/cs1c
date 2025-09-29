@@ -1,43 +1,77 @@
-version: '3.8'
 services: 
   cs:
-    build: .
+    build:
+      context: .
+      args:
+        - RING_VERSION=${RING_VERSION}
+        - JAVA_VERSION=${JAVA_VERSION}
+        - CS_HOST=${CS_HOST}
+        - CS_PORT=${CS_PORT}  
+        - CS_VERSION=${CS_VERSION}         
+        - POSTGRES_HOST=${POSTGRES_HOST}     
+        - POSTGRES_PORT=${POSTGRES_PORT}
+        - POSTGRES_DB=${POSTGRES_DB}
+        - POSTGRES_USER=${POSTGRES_USER}
+        - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}  
     stdin_open: true
     tty: true
     command: ./start.sh
     restart: unless-stopped
     ports:
-      - '8087:8087'
+      - ${CS_PORT}:${CS_PORT}
     depends_on:
       - db
+      # - minio
+    environment:
+      - POSTGRES_HOST=${POSTGRES_HOST}     
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - MINIO_HOST=${MINIO_HOST}
+      - MINIO_PORT=${MINIO_PORT}
+      - MINIO_BUCKET=${MINIO_BUCKET}
+      - MINIO_USER=${MINIO_USER}
+      - MINIO_PASSWORD=${MINIO_PASSWORD}
+    network_mode: host
+  
   db:
     image: 'postgres:12-alpine'
     restart: always
     environment:
-      - POSTGRES_DB=cs_db
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     ports:
-      - '5432:5432'
+      - ${POSTGRES_PORT}:${POSTGRES_PORT}
     volumes:
-      - './storage/postgres-data:/var/lib/postgresql/data'
-      - './db/init.sql:/docker-entrypoint-initdb.d/init.sql'
+      - ./storage/postgres-data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    network_mode: host
+  
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+    depends_on:
+      - db
+    network_mode: host
+
   minio:
-   image: minio/minio:latest
-   container_name: s3_cs
-   command: server --console-address ":9001" /data/
-   ports:
-     - "9000:9000"
-     - "9001:9001"
-   environment:
-     MINIO_ROOT_USER: cs_user
-     MINIO_ROOT_PASSWORD: cs_password
-   volumes:
-     - minio-storage:/data
-   healthcheck:
-     test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-     interval: 30s
-     timeout: 20s
-     retries: 3
+    image: minio/minio:latest
+    container_name: s3_cs
+    # command: server --address "${MINIO_HOST}:${MINIO_PORT}" --console-address ":${MINIO_CONSOLE_PORT}" /data/ 
+    command: server --console-address ":${MINIO_CONSOLE_PORT}" /data/ 
+    ports:
+      - ${MINIO_PORT}:${MINIO_PORT}
+      - 9001:9001
+    environment:
+      MINIO_ROOT_USER: ${MINIO_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD}
+    volumes:
+      - ./storage/minio-data:/data
+    network_mode: host
+
 volumes:
- minio-storage:
+  minio-storage:
